@@ -47,12 +47,6 @@
       <optional>true</optional>
     </dependency>
     <dependency>
-      <groupId>org.apache.bookkeeper</groupId>
-      <artifactId>testtools</artifactId>
-      <version>${project.parent.version}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
       <groupId>org.apache.bookkeeper.tests</groupId>
       <artifactId>stream-storage-tests-common</artifactId>
       <version>${project.version}</version>
@@ -92,17 +86,6 @@
             <goals>
               <goal>compile</goal>
               <goal>compile-custom</goal>
-            </goals>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-jar-plugin</artifactId>
-        <executions>
-          <execution>
-            <goals>
-              <goal>test-jar</goal>
             </goals>
           </execution>
         </executions>

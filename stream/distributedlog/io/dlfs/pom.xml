@@ -81,13 +81,6 @@
       </exclusions>
     </dependency>
     <dependency>
-      <groupId>org.apache.distributedlog</groupId>
-      <artifactId>distributedlog-core</artifactId>
-      <version>${project.parent.version}</version>
-      <classifier>tests</classifier>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
        <!-- needed by ZooKeeper server -->
        <groupId>org.xerial.snappy</groupId>
        <artifactId>snappy-java</artifactId>
