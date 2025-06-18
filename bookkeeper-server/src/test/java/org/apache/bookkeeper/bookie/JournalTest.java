@@ -52,14 +52,16 @@ public class JournalTest {
         createTemporaryJournalDirectory();
 
         // Crea un file journal dummy e restituisce il suo ID
-        Long journalId = System.currentTimeMillis();
+        Long dummyJournalId = System.currentTimeMillis();
         try {
-            journal.newLogFile(journalId, null)
-                    .close();
+            File dummyJournalFile = new File(JOURNAL_DIRECTORY, Long.toHexString(dummyJournalId) + ".txn");
+            if (!dummyJournalFile.createNewFile()) {
+                Assert.fail("Failed to create dummy journal file: " + dummyJournalFile.getAbsolutePath());
+            }
         } catch (Exception e) {
             Assert.fail("Failed to create dummy journal file: " + e.getMessage());
         }
-        return journalId;
+        return dummyJournalId;
     }
 
     private void writeToDummyJournalFile() throws IOException {
@@ -124,6 +126,25 @@ public class JournalTest {
     }
 
     @Test
+    public void testEmptyDirectoryRetrivialJournalIds() {
+
+        // Create an empty directory for testing
+        if (JOURNAL_DIRECTORY.exists()) {
+            for (File file : JOURNAL_DIRECTORY.listFiles()) {
+                file.delete();
+            }
+        }
+
+        // Retrieve journal IDs from the empty directory
+        try {
+            List<Long> journalIds = Journal.listJournalIds(JOURNAL_DIRECTORY, null);
+            Assert.assertEquals(Collections.emptyList(), journalIds);
+        } catch (Exception e) {
+            Assert.fail("Expected no exception for empty directory: " + e.getMessage());
+        }
+    }
+
+    @Test
     public void testValidDirectoryRetrivialJournalIds() {
 
         // Retrieve journal IDs from the valid directory
@@ -160,6 +181,29 @@ public class JournalTest {
             Assert.fail("Expected no exception for valid directory with non-matching filter: " + e.getMessage());
         }
 
+    }
+
+    @Test
+    public void testInvalidExtensionInDirectoryRetrivialJournalIds() {
+
+        // Create a file in the journal directory
+        Long invalidFileId = 0L;
+        try {
+            File invalidFile = new File(JOURNAL_DIRECTORY, String.valueOf(invalidFileId) + "-dummy.txt");
+            if (!invalidFile.createNewFile()) {
+                Assert.fail("Failed to create invalid file in journal directory");
+            }
+        } catch (IOException e) {
+            Assert.fail("Failed to create invalid file in journal directory: " + e.getMessage());
+        }
+
+        // Retrieve journal IDs from the directory with an invalid file
+        try {
+            List<Long> journalIds = Journal.listJournalIds(JOURNAL_DIRECTORY, null);
+            Assert.assertFalse(journalIds.contains(invalidFileId));
+        } catch (Exception e) {
+            Assert.fail("Expected no exception for directory with invalid file: " + e.getMessage());
+        }
     }
 
     @Test

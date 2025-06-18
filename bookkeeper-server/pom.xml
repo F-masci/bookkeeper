@@ -266,7 +266,39 @@
               <value>org.apache.bookkeeper.common.testing.util.TimedOutTestsListener</value>
             </property>
           </properties>
+          <argLine>${argLine}</argLine>
         </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <version>${jacoco-maven-plugin.version}</version>
+        <executions>
+          <!-- Aggiunge l'agente JaCoCo prima dei test -->
+          <execution>
+            <id>prepare-agent</id>
+            <goals>
+              <goal>prepare-agent</goal>
+            </goals>
+            <phase>initialize</phase>
+          </execution>
+          <!-- Genera report dopo la fase di test -->
+          <execution>
+            <id>report</id>
+            <phase>test</phase>
+            <goals>
+              <goal>report</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/jacoco-report</outputDirectory>
+              <includes>
+                <!-- pattern di classi da includere, ad es. solo le classi sotto il package org.example -->
+                <include>org/apache/bookkeeper/bookie/Journal.*</include>
+                <include>org/apache/bookkeeper/client/LedgerHandle.*</include>
+              </includes>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
