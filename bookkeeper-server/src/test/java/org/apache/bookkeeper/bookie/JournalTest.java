@@ -3,11 +3,9 @@ package org.apache.bookkeeper.bookie;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import org.apache.bookkeeper.conf.ServerConfiguration;
-import org.apache.kerby.util.Hex;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.apache.bookkeeper.net.BookieId;
+import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks;
+import org.junit.*;
 import org.mockito.Mock;
 
 import java.io.File;
@@ -15,9 +13,11 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.util.Collection;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.mockito.Mockito.mock;
 
@@ -36,6 +36,7 @@ public class JournalTest {
 
     private Journal journal;
     private Long dummyJournalId;
+    private String dummyEntry = "Dummy Journal Entry";
 
     private void createTemporaryJournalDirectory() {
         try {
@@ -67,7 +68,7 @@ public class JournalTest {
     private void writeToDummyJournalFile() throws IOException {
         File dummyJournalFile = new File(JOURNAL_DIRECTORY, Long.toHexString(dummyJournalId) + ".txn");
         FileChannel fc = new RandomAccessFile(dummyJournalFile, "rw").getChannel();
-        ByteBuffer buf = ByteBuffer.wrap("Dummy Journal Entry".getBytes());
+        ByteBuffer buf = ByteBuffer.wrap(dummyEntry.getBytes());
         try {
             fc.write(buf);
             fc.force(true);
@@ -79,7 +80,7 @@ public class JournalTest {
     }
 
     @Before
-    public void setUp() {
+    public void setUp() throws IOException {
 
         this.journal = new Journal(
             JOURNAL_IDX,
@@ -147,6 +148,15 @@ public class JournalTest {
     @Test
     public void testValidDirectoryRetrivialJournalIds() {
 
+        // Create a file in the journal directory
+        Long invalidFileId = 0L;
+        try {
+            File invalidFile = new File(JOURNAL_DIRECTORY, String.valueOf(invalidFileId) + "-dummy.txt");
+            if (!invalidFile.createNewFile()) Assert.fail("Failed to create invalid file in journal directory");
+        } catch (IOException e) {
+            Assert.fail("Failed to create invalid file in journal directory: " + e.getMessage());
+        }
+
         // Retrieve journal IDs from the valid directory
         try {
             List<Long> journalIds = Journal.listJournalIds(JOURNAL_DIRECTORY, null);
@@ -181,6 +191,14 @@ public class JournalTest {
             Assert.fail("Expected no exception for valid directory with non-matching filter: " + e.getMessage());
         }
 
+        // Retrieve journal IDs from the directory with an invalid file
+        try {
+            List<Long> journalIds = Journal.listJournalIds(JOURNAL_DIRECTORY, null);
+            Assert.assertFalse(journalIds.contains(invalidFileId));
+        } catch (Exception e) {
+            Assert.fail("Expected no exception for directory with invalid file: " + e.getMessage());
+        }
+
     }
 
     @Test
@@ -207,48 +225,153 @@ public class JournalTest {
     }
 
     @Test
-    public void testJournalWrite() {
-
-        final long entryId = 1L;
-        ByteBuf buf = Unpooled.wrappedBuffer(new byte[]{1, 2, 3, 4, 5});
-
-        // Test writing to the journal
+    public void testValidJournalRead() throws IOException {
+        this.writeToDummyJournalFile();
         try {
-            journal.logAddEntry(
-                LEDGER_IDX,
-                entryId,
-                buf,
-                false,
-                null,
-                null
-            );
-        } catch (Exception e) {
-            Assert.fail("Expected no exception during journal write: " + e.getMessage());
-        }
-    }
-
-    @Test
-    public void testDummyJournalRead() {
-
-        // Test reading from the journal
-        try {
-
-            // Write to the dummy journal file
-            writeToDummyJournalFile();
-
-            journal.scanJournal(
+            long r = journal.scanJournal(
                     dummyJournalId,
                     0L,
                     new Journal.JournalScanner() {
                         @Override
                         public void process(int journalVersion, long offset, ByteBuffer entry) throws IOException {
-                            Assert.fail("Expected no processing of journal entries in this test");
+                            Assert.assertEquals(ByteBuffer.wrap(dummyEntry.getBytes()), entry);
+                        }
+                    },
+                    false
+            );
+            Assert.assertTrue("Expected to read journal entry", r > 0);
+        } catch (Exception e) {
+            Assert.fail("Expected no exception during journal read: " + e.getMessage());
+        }
+    }
+
+    @Test
+    public void testNegativeLongJournalRead() throws IOException {
+        this.writeToDummyJournalFile();
+        try {
+            // Not found journal ID
+            journal.scanJournal(
+                    -1L,
+                    -1L,
+                    new Journal.JournalScanner() {
+                        @Override
+                        public void process(int journalVersion, long offset, ByteBuffer entry) throws IOException {
+                            Assert.fail("Expected no processing for not found journal ID");
                         }
                     },
                     true
             );
         } catch (Exception e) {
             Assert.fail("Expected no exception during journal read: " + e.getMessage());
+        }
+    }
+
+    @Test
+    public void testBigPosJournalRead() throws IOException {
+
+        this.writeToDummyJournalFile();
+
+        // Calculate file size of the dummy journal file
+        File dummyJournalFile = new File(JOURNAL_DIRECTORY, Long.toHexString(dummyJournalId) + ".txn");
+        long fileSize = dummyJournalFile.length();
+
+        try {
+            // Attempt to read beyond the file size
+            journal.scanJournal(
+                    dummyJournalId,
+                    fileSize+1, // Offset beyond the file size
+                    new Journal.JournalScanner() {
+                        @Override
+                        public void process(int journalVersion, long offset, ByteBuffer entry) throws IOException {
+                            Assert.fail("Expected no processing for offset beyond file size");
+                        }
+                    },
+                    true
+            );
+        } catch (Exception e) {
+            Assert.fail("Expected no exception during journal read: " + e.getMessage());
+        }
+    }
+
+    // Test: ledgerId e entryId validi, entry non vuoto, ackBeforeSync true, callback valida, ctx valido
+    @Test
+    public void testValidWrite() throws Exception {
+        try {
+            ByteBuf entry = Unpooled.wrappedBuffer(dummyEntry.getBytes(StandardCharsets.UTF_8));
+            TestWriteCallback cb = new TestWriteCallback();
+            String ctx = "testCtx";
+            journal.logAddEntry(1L, 1L, entry, true, cb, ctx);
+        } catch (Exception e) {
+            Assert.fail("Expected no exception during valid write: " + e.getMessage());
+        }
+    }
+
+    // Test: ledgerId negativo, entryId negativo, entry non vuoto, ackBeforeSync false, callback valida, ctx valido
+    @Test
+    public void testLogAddEntry_NegativeIds_NonEmptyEntry_AckBeforeSyncFalse_CallbackValid_CtxValid() throws Exception {
+        try {
+            ByteBuf entry = Unpooled.wrappedBuffer(dummyEntry.getBytes(StandardCharsets.UTF_8));
+            TestWriteCallback cb = new TestWriteCallback();
+            String ctx = "testCtx";
+            journal.logAddEntry(-1L, -1L, entry, true, cb, ctx);
+        } catch (Exception e) {
+            Assert.fail("Expected no exception during valid write: " + e.getMessage());
+        }
+    }
+
+    // Test: ledgerId massimo, entryId massimo, entry non vuoto, ackBeforeSync true, callback valida, ctx valido
+    @Test
+    public void testLogAddEntry_MaxIds_NonEmptyEntry_AckBeforeSyncTrue_CallbackValid_CtxValid() throws Exception {
+        try {
+            ByteBuf entry = Unpooled.wrappedBuffer(dummyEntry.getBytes(StandardCharsets.UTF_8));
+            TestWriteCallback cb = new TestWriteCallback();
+            journal.logAddEntry(Long.MAX_VALUE, Long.MAX_VALUE, entry, true, cb, "maxCtx");
+        } catch (Exception e) {
+            Assert.fail("Expected no exception during valid write: " + e.getMessage());
+        }
+    }
+
+    // Test: ledgerId valido, entryId valido, entry vuoto, ackBeforeSync false, callback valida, ctx valido
+    @Test
+    public void testLogAddEntry_ValidIds_EmptyEntry_AckBeforeSyncFalse_CallbackValid_CtxValid() throws Exception {
+        try {
+            ByteBuf entry = Unpooled.wrappedBuffer(dummyEntry.getBytes(StandardCharsets.UTF_8));
+            TestWriteCallback cb = new TestWriteCallback();
+            String ctx = "testCtx";
+            journal.logAddEntry(4L, 4L, entry, false, cb, ctx);
+        } catch (Exception e) {
+            Assert.fail("Expected no exception during valid write: " + e.getMessage());
+        }
+    }
+
+    // Test: ledgerId valido, entryId valido, entry non vuoto, ackBeforeSync true, callback valida, ctx null
+    @Test
+    public void testLogAddEntry_ValidIds_NonEmptyEntry_AckBeforeSyncTrue_CallbackValid_CtxNull() throws Exception {
+        try {
+            ByteBuf entry = Unpooled.wrappedBuffer(dummyEntry.getBytes(StandardCharsets.UTF_8));
+            TestWriteCallback cb = new TestWriteCallback();
+            String ctx = "testCtx";
+            journal.logAddEntry(4L, 5L, entry, true, cb, null);
+        } catch (Exception e) {
+            Assert.fail("Expected no exception during valid write: " + e.getMessage());
+        }
+    }
+
+    // Callback di test per verificare l’invocazione
+    private static class TestWriteCallback implements BookkeeperInternalCallbacks.WriteCallback {
+        volatile boolean invoked = false;
+        volatile Object ctx = null;
+        private final CountDownLatch latch = new CountDownLatch(1);
+
+        @Override
+        public void writeComplete(int rc, long ledgerId, long entryId, BookieId addr, Object ctx) {
+            this.invoked = true;
+            this.ctx = ctx;
+            latch.countDown();
+        }
+
+        void await() throws InterruptedException {
+            latch.await(2, TimeUnit.SECONDS);
         }
     }
 
