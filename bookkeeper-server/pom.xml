@@ -178,18 +178,6 @@
         </exclusions>
     </dependency>
     <dependency>
-        <groupId>org.apache.kerby</groupId>
-        <artifactId>kerb-simplekdc</artifactId>
-        <version>${kerby.version}</version>
-        <scope>test</scope>
-        <exclusions>
-            <exclusion>
-                <groupId>org.slf4j</groupId>
-                <artifactId>*</artifactId>
-            </exclusion>
-        </exclusions>
-    </dependency>
-    <dependency>
        <!-- needed by ZooKeeper server tests utilities -->
        <groupId>org.junit.jupiter</groupId>
        <artifactId>junit-jupiter-api</artifactId>
@@ -217,11 +205,6 @@
         <groupId>junit</groupId>
         <artifactId>junit</artifactId>
         <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.mockito</groupId>
-      <artifactId>mockito-core</artifactId>
-      <scope>test</scope>
     </dependency>
   </dependencies>
   <build>
@@ -256,75 +239,70 @@
         <artifactId>spotbugs-maven-plugin</artifactId>
       </plugin>
       <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <configuration>
-          <trimStackTrace>false</trimStackTrace>
-          <properties>
-            <property>
-              <name>listener</name>
-              <value>org.apache.bookkeeper.common.testing.util.TimedOutTestsListener</value>
-            </property>
-          </properties>
-          <argLine>${argLine}</argLine>
-        </configuration>
-      </plugin>
-      <plugin>
-        <groupId>org.pitest</groupId>
-        <artifactId>pitest-maven</artifactId>
-        <version>${pitest-maven-plugin.version}</version>
-        <configuration>
-          <targetClasses>
-            <param>org.apache.bookkeeper.bookie.Journal</param>
-          </targetClasses>
-        </configuration>
-        <executions>
-          <execution>
-            <id>pitest</id>
-            <phase>verify</phase>
-            <goals>
-              <goal>mutationCoverage</goal>
-            </goals>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
         <version>${jacoco-maven-plugin.version}</version>
         <executions>
-          <!-- Aggiunge l'agente JaCoCo prima dei test -->
           <execution>
-            <id>prepare-agent</id>
+            <id>pre-unit-test</id>
             <goals>
               <goal>prepare-agent</goal>
             </goals>
-            <phase>initialize</phase>
+            <configuration>
+              <destFile>${project.build.directory}/coverage-reports/jacoco-ut.exec</destFile>
+              <propertyName>surefireArgLine</propertyName>
+            </configuration>
           </execution>
-          <!-- Genera report dopo la fase di test -->
           <execution>
-            <id>report</id>
+            <id>post-unit-test</id>
             <phase>test</phase>
             <goals>
               <goal>report</goal>
             </goals>
             <configuration>
-              <outputDirectory>${project.build.directory}/jacoco-report</outputDirectory>
+              <dataFile>${project.build.directory}/coverage-reports/jacoco-ut.exec</dataFile>
+              <outputDirectory>${project.build.directory}/coverage-reports/jacoco-ut</outputDirectory>
+              <!-- pattern di classi da includere, ad es. solo le classi sotto il package org.example -->
               <includes>
-                <!-- pattern di classi da includere, ad es. solo le classi sotto il package org.example -->
                 <include>org/apache/bookkeeper/bookie/Journal.*</include>
                 <include>org/apache/bookkeeper/client/LedgerHandle.*</include>
               </includes>
+              <excludes>
+                <exclude>**/*ESPitTest*</exclude>
+              </excludes>
             </configuration>
           </execution>
         </executions>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-javadoc-plugin</artifactId>
+        <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
-          <sourcepath>${src.dir}</sourcepath>
-          <!-- Avoid for missing javadoc comments to be marked as errors -->
+          <trimStackTrace>false</trimStackTrace>
+          <!-- add-opens permette al test JournlLLMRun di eseguire anche su JDK 17+ evitando le restrizioni su reflection -->
+          <!-- <argLine>${surefireArgLine} -add-opens java.base/java.lang=ALL-UNNAMED -add-opens java.desktop/java.awt=ALL-UNNAMED</argLine> -->
+          <argLine>${surefireArgLine}</argLine>
+          <properties>
+            <property>
+              <name>listener</name>
+              <value>org.apache.bookkeeper.common.testing.util.TimedOutTestsListener</value>
+            </property>
+            <property>
+              <name>listener</name>
+              <value>org.evosuite.runtime.InitializingListener</value>
+            </property>
+          </properties>
+          <excludes>
+            <exclude>**/*ESPitTest*</exclude>
+          </excludes>
+        </configuration>
+      </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <configuration>
+              <sourcepath>${src.dir}</sourcepath>
+              <!-- Avoid for missing javadoc comments to be marked as errors -->
           <doclint>none</doclint>
           <!--
           <subpackages>org.apache.bookkeeper.client:org.apache.bookkeeper.conf:org.apache.bookkeeper.feature</subpackages>
@@ -398,6 +376,48 @@
             <configuration>
               <skipTests>true</skipTests>
             </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <profile>
+      <id>pit</id>
+      <properties>
+        <jacoco.skip>true</jacoco.skip>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+              <excludes>
+                <exclude>**/*ESJacocoTest.java</exclude>
+              </excludes>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.pitest</groupId>
+            <artifactId>pitest-maven</artifactId>
+            <version>${pitest-maven-plugin.version}</version>
+            <configuration>
+              <targetClasses>
+                <param>org.apache.bookkeeper.bookie.Journal</param>
+                <param>org.apache.bookkeeper.client.LedgerHandle</param>
+              </targetClasses>
+              <excludedTestClasses>
+                <excludedTestClass>**/*ESJacocoTest*</excludedTestClass>
+              </excludedTestClasses>
+            </configuration>
+            <executions>
+              <execution>
+                <id>pitest</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>mutationCoverage</goal>
+                </goals>
+              </execution>
+            </executions>
           </plugin>
         </plugins>
       </build>
