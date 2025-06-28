@@ -408,6 +408,7 @@
               <excludedTestClasses>
                 <excludedTestClass>**/*ESJacocoTest*</excludedTestClass>
               </excludedTestClasses>
+              <threads>1</threads>
             </configuration>
             <executions>
               <execution>
