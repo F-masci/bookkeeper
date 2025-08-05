@@ -249,7 +249,7 @@
               <goal>prepare-agent</goal>
             </goals>
             <configuration>
-              <destFile>${project.build.directory}/coverage-reports/jacoco-ut.exec</destFile>
+              <destFile>${project.build.directory}/coverage-reports/jacoco.exec</destFile>
               <propertyName>surefireArgLine</propertyName>
             </configuration>
           </execution>
@@ -260,16 +260,13 @@
               <goal>report</goal>
             </goals>
             <configuration>
-              <dataFile>${project.build.directory}/coverage-reports/jacoco-ut.exec</dataFile>
-              <outputDirectory>${project.build.directory}/coverage-reports/jacoco-ut</outputDirectory>
+              <dataFile>${project.build.directory}/coverage-reports/jacoco.exec</dataFile>
+              <outputDirectory>${project.build.directory}/coverage-reports/jacoco</outputDirectory>
               <!-- pattern di classi da includere, ad es. solo le classi sotto il package org.example -->
               <includes>
-                <include>org/apache/bookkeeper/bookie/Journal.*</include>
-                <include>org/apache/bookkeeper/client/LedgerHandle.*</include>
+                <include>org/apache/bookkeeper/bookie/Journal*</include>
+                <include>org/apache/bookkeeper/bookie/JournalChannel*</include>
               </includes>
-              <excludes>
-                <exclude>**/*ESPitTest*</exclude>
-              </excludes>
             </configuration>
           </execution>
         </executions>
@@ -292,9 +289,7 @@
               <value>org.evosuite.runtime.InitializingListener</value>
             </property>
           </properties>
-          <excludes>
-            <exclude>**/*ESPitTest*</exclude>
-          </excludes>
+          <!-- <testFailureIgnore>true</testFailureIgnore> -->
         </configuration>
       </plugin>
           <plugin>
@@ -381,38 +376,39 @@
       </build>
     </profile>
 
+    <!-- PIT -->
+
     <profile>
       <id>pit</id>
       <properties>
-        <jacoco.skip>true</jacoco.skip>
+        <!-- <jacoco.skip>true</jacoco.skip> -->
       </properties>
       <build>
         <plugins>
-          <plugin>
-            <artifactId>maven-surefire-plugin</artifactId>
-            <configuration>
-              <excludes>
-                <exclude>**/*ESJacocoTest.java</exclude>
-              </excludes>
-            </configuration>
-          </plugin>
           <plugin>
             <groupId>org.pitest</groupId>
             <artifactId>pitest-maven</artifactId>
             <version>${pitest-maven-plugin.version}</version>
             <configuration>
               <targetClasses>
+                <param>org.apache.bookkeeper.bookie.JournalChannel</param>
                 <param>org.apache.bookkeeper.bookie.Journal</param>
-                <param>org.apache.bookkeeper.client.LedgerHandle</param>
               </targetClasses>
               <excludedTestClasses>
-                <excludedTestClass>**/*ESJacocoTest*</excludedTestClass>
+                <param>*ESTest*</param>
               </excludedTestClasses>
               <threads>1</threads>
+              <outputFormats>
+                <param>XML</param>
+                <param>HTML</param>
+              </outputFormats>
+              <exportLineCoverage>true</exportLineCoverage>
+              <reportsDirectory>${project.build.directory}/coverage-reports/pit</reportsDirectory>
+              <!-- <verbose>true</verbose> -->
             </configuration>
             <executions>
               <execution>
-                <id>pitest</id>
+                <id>pitest-manual</id>
                 <phase>verify</phase>
                 <goals>
                   <goal>mutationCoverage</goal>
