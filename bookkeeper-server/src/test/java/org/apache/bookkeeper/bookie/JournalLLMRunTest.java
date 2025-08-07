@@ -102,6 +102,3 @@ public class JournalLLMRunTest {
         }
     }
 }
-//java -jar /home/fmasci/Programmi/evosuite-1.0.6.jar -class org.apache.bookkeeper.bookie.Journal -generateSuite -Dsearch_budget=60 -Dstopping_condition=MaxTime -projectCP .
-//java -jar /home/fmasci/Programmi/evosuite-1.0.6.jar -class org.apache.bookkeeper.bookie.Journal -generateSuite -Dsearch_budget=60 -Dstopping_condition=MaxTime -projectCP .
-

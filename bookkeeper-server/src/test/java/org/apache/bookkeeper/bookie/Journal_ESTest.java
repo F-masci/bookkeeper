@@ -18,15 +18,7 @@ import io.netty.buffer.UnpooledUnsafeDirectByteBuf;
 import java.io.File;
 import java.nio.channels.FileChannel;
 import java.util.List;
-import org.apache.bookkeeper.bookie.BookieImpl;
-import org.apache.bookkeeper.bookie.BufferedChannel;
-import org.apache.bookkeeper.bookie.CheckpointSource;
-import org.apache.bookkeeper.bookie.DefaultFileChannel;
-import org.apache.bookkeeper.bookie.Journal;
-import org.apache.bookkeeper.bookie.JournalAliveListener;
-import org.apache.bookkeeper.bookie.JournalChannel;
-import org.apache.bookkeeper.bookie.LedgerDirsManager;
-import org.apache.bookkeeper.bookie.LogMark;
+
 import org.apache.bookkeeper.bookie.stats.JournalStats;
 import org.apache.bookkeeper.common.collections.BatchedBlockingQueue;
 import org.apache.bookkeeper.common.util.MemoryLimitController;

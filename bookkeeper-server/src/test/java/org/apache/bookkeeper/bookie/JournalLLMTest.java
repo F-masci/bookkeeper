@@ -1,13 +1,9 @@
-// File: bookkeeper-server/src/test/java/org/apache/bookkeeper/bookie/JournalUnitTest.java
 package org.apache.bookkeeper.bookie;
 
-import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import org.apache.bookkeeper.conf.ServerConfiguration;
-import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.WriteCallback;
 import org.apache.bookkeeper.stats.NullStatsLogger;
 import org.junit.*;
-import org.mockito.Mockito;
 
 import java.io.File;
 import java.io.IOException;

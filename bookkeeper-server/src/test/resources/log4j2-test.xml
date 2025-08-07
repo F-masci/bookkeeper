@@ -9,6 +9,9 @@
         <Logger name="org.apache.bookkeeper.bookie.JournalChannel" level="DEBUG" additivity="false">
             <AppenderRef ref="CONSOLE"/>
         </Logger>
+        <Logger name="org.apache.bookkeeper.bookie.Journal" level="DEBUG" additivity="false">
+            <AppenderRef ref="CONSOLE"/>
+        </Logger>
         <Root level="WARN">
             <AppenderRef ref="CONSOLE"/>
         </Root>

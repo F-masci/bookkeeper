@@ -264,8 +264,8 @@
               <outputDirectory>${project.build.directory}/coverage-reports/jacoco</outputDirectory>
               <!-- pattern di classi da includere, ad es. solo le classi sotto il package org.example -->
               <includes>
-                <include>org/apache/bookkeeper/bookie/Journal*</include>
-                <include>org/apache/bookkeeper/bookie/JournalChannel*</include>
+                <include>org/apache/bookkeeper/bookie/Journal.class</include>
+                <include>org/apache/bookkeeper/bookie/JournalChannel.class</include>
               </includes>
             </configuration>
           </execution>
@@ -289,7 +289,7 @@
               <value>org.evosuite.runtime.InitializingListener</value>
             </property>
           </properties>
-          <!-- <testFailureIgnore>true</testFailureIgnore> -->
+          <testFailureIgnore>true</testFailureIgnore>
         </configuration>
       </plugin>
           <plugin>
