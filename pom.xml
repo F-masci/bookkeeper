@@ -197,7 +197,7 @@
     <!-- <pitest-maven-plugin.version>1.19.6</pitest-maven-plugin.version> -->
     <pitest-maven-plugin.version>1.17.4</pitest-maven-plugin.version>
     <evosuite-standalone-runtime.version>1.0.6</evosuite-standalone-runtime.version>
-    <sonar-maven-plugin.version>3.11.0.3922</sonar-maven-plugin.version>
+    <sonar-maven-plugin.version>5.1.0.4751</sonar-maven-plugin.version>
     <dependency-check-maven.version>12.1.0</dependency-check-maven.version>
     <nar-maven-plugin.version>3.10.1</nar-maven-plugin.version>
     <os-maven-plugin.version>1.7.1</os-maven-plugin.version>
@@ -213,6 +213,9 @@
     <otel.semconv.version>1.29.0-alpha</otel.semconv.version>
     <UBUNTU_MIRROR>http://archive.ubuntu.com/ubuntu/</UBUNTU_MIRROR>
     <UBUNTU_SECURITY_MIRROR>http://security.ubuntu.com/ubuntu/</UBUNTU_SECURITY_MIRROR>
+
+    <java.version>1.8</java.version>
+    <sonar.scanner.force-deprecated-java-version>true</sonar.scanner.force-deprecated-java-version>
 
     <sonar.projectKey>F-masci_bookkeeper</sonar.projectKey>
     <sonar.organization>f-masci</sonar.organization>
@@ -1158,7 +1161,7 @@
       <plugin>
         <groupId>org.sonarsource.scanner.maven</groupId>
         <artifactId>sonar-maven-plugin</artifactId>
-        <version>${sonar-maven-plugin.version}</version> <!-- o l'ultima disponibile -->
+        <version>${sonar-maven-plugin.version}</version>
       </plugin>
     </plugins>
   </build>
