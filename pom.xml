@@ -70,6 +70,7 @@
     <module>microbenchmarks</module>
     <module>bookkeeper-slogger</module>
     <module>native-io</module>
+      <module>coverage-reports</module>
   </modules>
   <mailingLists>
     <mailingList>
@@ -216,7 +217,9 @@
     <sonar.projectKey>F-masci_bookkeeper</sonar.projectKey>
     <sonar.organization>f-masci</sonar.organization>
     <sonar.host.url>https://sonarcloud.io</sonar.host.url>
-    <sonar.token>${env.SONAR_TOKEN}</sonar.token>
+    <sonar.coverage.jacoco.xmlReportPaths>../coverage-reports/target/reports/jacoco-aggregate/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+    <sonar.junit.reportPaths>target/surefire-reports</sonar.junit.reportPaths>
+
   </properties>
 
   <!-- dependency definitions -->
