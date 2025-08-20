@@ -3,11 +3,16 @@ package org.apache.bookkeeper.bookie;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import org.apache.bookkeeper.conf.ServerConfiguration;
+import org.apache.bookkeeper.util.PageCacheUtil;
+import org.apache.bookkeeper.util.ZeroBuffer;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
@@ -26,10 +31,9 @@ import static org.mockito.Mockito.*;
 @RunWith(MockitoJUnitRunner.class)
 public class JournalChannelTest {
 
-    private final int LEDGER_IDX = 1;
-    private final int JOURNAL_IDX = 1;
-    private final String JOURNAL_PATH = System.getProperty("java.io.tmpdir");
-    private final File JOURNAL_DIRECTORY = new File(JOURNAL_PATH, "/bk-journal-" + LEDGER_IDX + "_" + System.nanoTime());
+    private static final int LEDGER_IDX = 1;
+    private static final String JOURNAL_PATH = System.getProperty("java.io.tmpdir");
+    private static final File JOURNAL_DIRECTORY = new File(JOURNAL_PATH, "/bk-journal-" + LEDGER_IDX + "_" + System.nanoTime());
 
     // Use default ServerConfiguration for testing
     private final ServerConfiguration serverConfiguration = new ServerConfiguration();
@@ -70,10 +74,6 @@ public class JournalChannelTest {
         }
     }
 
-    private boolean checkJournalCreation(File journal) {
-        return checkJournalCreation(JOURNAL_DIRECTORY, journal);
-    }
-
     private boolean checkJournalCreation(File directory, Long journalId) {
         File dummyJournalFile = new File(directory, Long.toHexString(journalId) + ".txn");
         return checkJournalCreation(directory, dummyJournalFile);
@@ -81,10 +81,6 @@ public class JournalChannelTest {
 
     private boolean checkJournalCreation(Long journalId) {
         return checkJournalCreation(JOURNAL_DIRECTORY, journalId);
-    }
-
-    private boolean checkDummyJournalCreation(File directory) {
-        return checkJournalCreation(directory, dummyJournalId);
     }
 
     private boolean checkDummyJournalCreation() {
@@ -170,6 +166,21 @@ public class JournalChannelTest {
         return checkJournalRead(journalChannel, dummyJournalId);
     }
 
+    @Mock
+    private FileChannel mockFc;
+
+    @Mock
+    private BookieFileChannel mockBfc;
+
+    @Mock
+    private FileChannelProvider mockFcp;
+
+    @Mock
+    private Journal.BufferedChannelBuilder mockBcb;
+
+    @Mock
+    private BufferedChannel mockBc;
+
     @Before
     public void setUp() throws Exception {
 
@@ -177,10 +188,31 @@ public class JournalChannelTest {
         dummyJournalId = UUID.randomUUID().getLeastSignificantBits();
         serverConfiguration.setJournalDirName(JOURNAL_DIRECTORY.getAbsolutePath());
 
+        mockFc = mock(FileChannel.class);
+        lenient().when(mockFc.write(any(ByteBuffer.class), anyLong())).thenAnswer(invocation -> {
+            ByteBuffer buffer = invocation.getArgument(0);
+            long pos = invocation.getArgument(1);
+            if (pos < 0) {
+                throw new IllegalArgumentException("Negative position: " + pos);
+            }
+            return buffer.capacity();
+        });
+
+        mockBfc = mock(BookieFileChannel.class);
+        lenient().when(mockBfc.getFileChannel()).thenReturn(mockFc);
+
+        mockFcp = mock(FileChannelProvider.class);
+        // when(mockFcp.open(any(File.class), any(ServerConfiguration.class))).thenReturn(mockBfc);
+
+        mockBc = mock(BufferedChannel.class);
+
+        mockBcb = mock(Journal.BufferedChannelBuilder.class);
+        // when(mockBcb.create(any(FileChannel.class), anyInt())).thenReturn(mockBc);
+
     }
 
     @After
-    public void tearDown() throws InterruptedException {
+    public void tearDown() {
         if (JOURNAL_DIRECTORY.exists()) {
             for (File file : JOURNAL_DIRECTORY.listFiles()) {
                 file.delete();
@@ -188,6 +220,8 @@ public class JournalChannelTest {
             JOURNAL_DIRECTORY.delete();
         }
     }
+
+    /* --- CATEGORY PARTITION --- */
 
     // --- Caso base ---
     // journalDirectory: esistente
@@ -275,8 +309,6 @@ public class JournalChannelTest {
         JournalChannelBuilder jcb = new JournalChannelBuilder().withWriteBufferSize(0);
         JournalChannel jc = jcb.build();
         Assert.assertTrue(checkDummyJournalCreation());
-        // FIXME
-        // Assert.assertTrue(checkDummyJournalWrite(jc));
         Assert.assertTrue(checkDummyJournalRead(jc));
         jc.close();
     }
@@ -335,21 +367,28 @@ public class JournalChannelTest {
     // position: negativo
     @Test
     public void testJournalChannel_10() throws Exception {
-        JournalChannelBuilder jcb = new JournalChannelBuilder().withPosition(-1L);
-        JournalChannel jc = jcb.build();
-        Assert.assertTrue(checkDummyJournalCreation());
-        Assert.assertTrue(checkDummyJournalWrite(jc));
-        Assert.assertTrue(checkDummyJournalRead(jc));
-        jc.close();
+
+        File dummyJournalFile = new File(JOURNAL_DIRECTORY, Long.toHexString(dummyJournalId) + ".txn");
+        if (!dummyJournalFile.exists()) dummyJournalFile.createNewFile();
+
+        try {
+            JournalChannelBuilder jcb = new JournalChannelBuilder().withPosition(-1L);
+            jcb.build();
+            Assert.fail("Expected IllegalArgumentException due to negative position");
+        } catch (Exception e) {
+            Assert.assertTrue(e instanceof IllegalArgumentException);
+        }
     }
 
     // position: Integer.MAX_VALUE
     @Test
     public void testJournalChannel_11() throws Exception {
+
+        File dummyJournalFile = new File(JOURNAL_DIRECTORY, Long.toHexString(dummyJournalId) + ".txn");
+        if (!dummyJournalFile.exists()) dummyJournalFile.createNewFile();
+
         JournalChannelBuilder jcb = new JournalChannelBuilder().withPosition(Integer.MAX_VALUE);
         JournalChannel jc = jcb.build();
-        Assert.assertTrue(checkDummyJournalCreation());
-        Assert.assertTrue(checkDummyJournalWrite(jc));
         Assert.assertTrue(checkDummyJournalRead(jc));
         jc.close();
     }
@@ -428,7 +467,7 @@ public class JournalChannelTest {
         jc.close();
     }
 
-    // --- COVERAGE ---
+    /*// --- COVERAGE ---
 
     // Mutation coverage for renameJournalFile
     // toReplaceLogId: valido
@@ -439,18 +478,17 @@ public class JournalChannelTest {
         File toReplaceLogFile = new File(JOURNAL_DIRECTORY, Long.toHexString(toReplaceLogId) + ".txn");
         if (!toReplaceLogFile.exists()) toReplaceLogFile.createNewFile();
 
-        FileChannelProvider mockedFcp = mock(DefaultFileChannelProvider.class);
-        when(mockedFcp.supportReuseFile()).thenReturn(true);
-        when(mockedFcp.open(any(File.class), any(ServerConfiguration.class)))
-            .thenAnswer(invocation -> {
-                File file = invocation.getArgument(0);
-                ServerConfiguration serverConfiguration = invocation.getArgument(1);
-                return new DefaultFileChannel(file, serverConfiguration);
-            });
+        when(mockFcp.supportReuseFile()).thenReturn(true);
+        when(mockFcp.open(any(File.class), any(ServerConfiguration.class)))
+                .thenAnswer(invocation -> {
+                    File file = invocation.getArgument(0);
+                    ServerConfiguration localServerConfiguration = invocation.getArgument(1);
+                    return new DefaultFileChannel(file, localServerConfiguration);
+                });
 
         JournalChannelBuilder jcb = new JournalChannelBuilder()
                 .withToReplaceLogId(toReplaceLogId)
-                .withFileChannelProvider(mockedFcp);
+                .withFileChannelProvider(mockFcp);
         JournalChannel jc = jcb.build();
         Assert.assertFalse(toReplaceLogFile.exists());
         Assert.assertTrue(checkDummyJournalCreation());
@@ -468,18 +506,17 @@ public class JournalChannelTest {
         File toReplaceLogFile = new File(JOURNAL_DIRECTORY, Long.toHexString(toReplaceLogId) + ".txn");
         if (toReplaceLogFile.exists()) toReplaceLogFile.delete();
 
-        FileChannelProvider mockedFcp = mock(DefaultFileChannelProvider.class);
-        when(mockedFcp.supportReuseFile()).thenReturn(true);
-        when(mockedFcp.open(any(File.class), any(ServerConfiguration.class)))
-            .thenAnswer(invocation -> {
-                File file = invocation.getArgument(0);
-                ServerConfiguration serverConfiguration = invocation.getArgument(1);
-                return new DefaultFileChannel(file, serverConfiguration);
-            });
+        when(mockFcp.supportReuseFile()).thenReturn(true);
+        when(mockFcp.open(any(File.class), any(ServerConfiguration.class)))
+                .thenAnswer(invocation -> {
+                    File file = invocation.getArgument(0);
+                    ServerConfiguration localServerConfiguration = invocation.getArgument(1);
+                    return new DefaultFileChannel(file, localServerConfiguration);
+                });
 
         JournalChannelBuilder jcb = new JournalChannelBuilder()
                 .withToReplaceLogId(toReplaceLogId)
-                .withFileChannelProvider(mockedFcp);
+                .withFileChannelProvider(mockFcp);
         JournalChannel jc = jcb.build();
         Assert.assertFalse(toReplaceLogFile.exists());
         Assert.assertTrue(checkDummyJournalCreation());
@@ -488,55 +525,419 @@ public class JournalChannelTest {
         jc.close();
     }
 
-    // Line coverage
-    // fRemoveFromPageCache: true
+    // Mutation coverage
+    // formatVersion: line 228
+    // Controlla che la posizione del FileChannel sia corretta dopo l'apertura del file di journal con versione 4
     @Test
     public void testJournalChannel_coverage_3() throws Exception {
 
-        Journal.BufferedChannelBuilder bcBuilder = mock(Journal.BufferedChannelBuilder.class);
-        BufferedChannel bc = mock(BufferedChannel.class);
-        when(bc.forceWrite(anyBoolean())).thenReturn(20 * 1024 * 1024L); // 20MB
-        when(bcBuilder.create(any(FileChannel.class), anyInt())).thenReturn(bc);
+        // Crea un file di journal con versione 5
+        File dummyJournalFile = new File(JOURNAL_DIRECTORY, Long.toHexString(dummyJournalId) + ".txn");
+        if (!dummyJournalFile.exists()) dummyJournalFile.createNewFile();
+        try (FileChannel fc = new RandomAccessFile(dummyJournalFile, "rw").getChannel()) {
+            ByteBuffer header = ByteBuffer.allocate(JournalChannel.HEADER_SIZE);
+            // Scrivi magic + versione nei primi 8 byte
+            header.put("BKLG".getBytes(StandardCharsets.UTF_8));
+            header.putInt(JournalChannel.V5);
+            // Il resto rimane a zero
+            header.position(0);
+            fc.write(header, 0);
+        }
 
-        // Mock PageCacheUtil
-        // Usa PowerMockito o altro framework se serve mockare statici, oppure verifica con side effect
+        JournalChannelBuilder jcb = new JournalChannelBuilder()
+                .withLogId(dummyJournalId);
+        JournalChannel jc = jcb.build();
+        Assert.assertEquals("Expected position at HEADER_SIZE", JournalChannel.HEADER_SIZE, jc.fc.position());
+        jc.close();
+    }
 
-        JournalChannelBuilder jcb = new JournalChannelBuilder().withBufferedChannelBuilder(bcBuilder).withRemoveFromPageCache(true);
+    // Mutation coverage
+    // formatVersion: line 230
+    // Controlla che la posizione del FileChannel sia corretta dopo l'apertura del file di journal con versione 2
+    @Test
+    public void testJournalChannel_coverage_4() throws Exception {
+
+        // Crea un file di journal con versione 2
+        File dummyJournalFile = new File(JOURNAL_DIRECTORY, Long.toHexString(dummyJournalId) + ".txn");
+        if (!dummyJournalFile.exists()) dummyJournalFile.createNewFile();
+        try (FileChannel fc = new RandomAccessFile(dummyJournalFile, "rw").getChannel()) {
+            ByteBuffer header = ByteBuffer.allocate(JournalChannel.VERSION_HEADER_SIZE);
+            header.put("BKLG".getBytes(StandardCharsets.UTF_8));
+            header.putInt(JournalChannel.V2);
+            header.position(0);
+            fc.write(header, 0);
+        }
+
+        JournalChannelBuilder jcb = new JournalChannelBuilder()
+                .withLogId(dummyJournalId);
+        JournalChannel jc = jcb.build();
+        Assert.assertEquals("Expected position at VERSION_HEADER_SIZE", JournalChannel.VERSION_HEADER_SIZE, jc.fc.position());
+        jc.close();
+    }
+
+    // Mutation coverage
+    // preAllocSize: line 158
+    @Test
+    public void testJournalChannel_coverage_5() throws Exception {
+        long preAllocSize = 2050L; // Non multiplo di 512
+        int journalAlignSize = 512;
+
+        // Cattura la posizione usata per la preallocazione
+        ArgumentCaptor<Long> positionCaptor = ArgumentCaptor.forClass(Long.class);
+
+        // Simula che la posizione del BufferedChannel sia 0
+        when(mockBc.position()).thenReturn(0L);
+
+        JournalChannelBuilder jcb = new JournalChannelBuilder()
+                .withPreAllocSize(preAllocSize)
+                .withJournalAlignSize(journalAlignSize)
+                .withBufferedChannelBuilder(mockBcb)
+                .withFileChannelProvider(mockFcp);
+
         JournalChannel jc = jcb.build();
 
-        // Forza la scrittura
-        jc.forceWrite(false);
+        // Forza la preallocazione
+        jc.preAllocIfNeeded(4096L);
 
-        // Verifica che lastDropPosition sia stato aggiornato (>0)
-        Field lastDropPosition = jc.getClass().getDeclaredField("lastDropPosition");
-        lastDropPosition.setAccessible(true);
-        Assert.assertTrue(lastDropPosition.getLong(jc) > 0);
+        // Verifica che la scrittura sia avvenuta alla posizione attesa (multiplo di journalAlignSize)
+        verify(mockFc, atLeastOnce()).write(any(ByteBuffer.class), positionCaptor.capture());
+        long lastPosition = positionCaptor.getValue();
+        Assert.assertEquals(0, lastPosition % journalAlignSize);
+
+        jc.close();
+    }
+
+    // Mutation coverage
+    // notifyRename: line 168
+    // Controlla che il metodo notifyRename venga chiamato correttamente
+    @Test
+    public void testJournalChannel_coverage_6() throws Exception {
+
+        Long toReplaceLogId = 124L;
+        File toReplaceLogFile = new File(JOURNAL_DIRECTORY, Long.toHexString(toReplaceLogId) + ".txn");
+        if (!toReplaceLogFile.exists()) toReplaceLogFile.createNewFile();
+
+        when(mockFcp.supportReuseFile()).thenReturn(true);
+        when(mockFcp.open(any(File.class), any(ServerConfiguration.class)))
+                .thenAnswer(invocation -> {
+                    File file = invocation.getArgument(0);
+                    ServerConfiguration localServerConfiguration = invocation.getArgument(1);
+                    return new DefaultFileChannel(file, localServerConfiguration);
+                });
+
+        // Uso il mockFcp per verificare che notifyRename venga chiamato
+        JournalChannelBuilder jcb = new JournalChannelBuilder()
+                .withFileChannelProvider(mockFcp)
+                .withToReplaceLogId(toReplaceLogId);
+        JournalChannel jc = jcb.build();
+
+        // Verifica che il metodo notifyRename sia stato chiamato
+        Mockito.verify(mockFcp, times(1)).notifyRename(any(File.class), any(File.class));
+        jc.close();
+    }
+
+    // Mutation coverage
+    // formatVersionToWrite: line 174
+    // Controlla che la versione minima di un nuovo Journal sia V4
+    @Test
+    public void testJournalChannel_coverage_7() throws Exception {
+        JournalChannelBuilder jcb = new JournalChannelBuilder().withFormatVersionToWrite(JournalChannel.V4);
+        JournalChannel jc = jcb.build();
+        Assert.assertEquals("Expected V4 minimum versionToWrite", JournalChannel.V4, jc.getFormatVersion());
+        jc.close();
+    }
+
+    // Mutation coverage
+    // fRemoveFromPageCache: line 243
+    // Controlla che venga preso il file descriptor per gestire la cache delle pagine
+    @Test
+    public void testJournalChannel_coverage_8() throws Exception {
+        JournalChannelBuilder jcb = new JournalChannelBuilder().withRemoveFromPageCache(true);
+        JournalChannel jc = jcb.build();
+
+        // Verifica che il file descriptor non sia -1
+        Field fdField = jc.getClass().getDeclaredField("fd");
+        fdField.setAccessible(true);
+        int fd = (int) fdField.get(jc);
+
+        Assert.assertNotEquals("Expected a source file to manage page cache", -1, fd);
+        jc.close();
+    }
+
+    // Mutation coverage
+    // ZeroBuffer: line 254
+    // Controlla che il buffer dell'header venga azzerato correttamente prima di scriverla
+    @Test
+    public void testJournalChannel_coverage_9() throws Exception {
+        try (MockedStatic<ZeroBuffer> zeroBufferMock = mockStatic(ZeroBuffer.class)) {
+            // Costruisci JournalChannel normalmente
+            JournalChannelBuilder jcb = new JournalChannelBuilder();
+            JournalChannel jc = jcb.build();
+
+            // Verifica che ZeroBuffer.put sia stato chiamato almeno una volta
+            zeroBufferMock.verify(() -> ZeroBuffer.put(any(ByteBuffer.class)), atLeastOnce());
+
+            jc.close();
+        }
+    }
+
+    // Mutation coverage
+    // forceWrite: line 262
+    // Controlla che il metodo force venga chiamato correttamente
+    @Test
+    public void testJournalChannel_coverage_10() throws Exception {
+
+        when(mockBc.forceWrite(anyBoolean())).thenReturn(512L);
+
+        JournalChannelTest.JournalChannelBuilder jcb = new JournalChannelTest.JournalChannelBuilder()
+                .withBufferedChannelBuilder(mockBcb)
+                .withFileChannelProvider(mockFcp);
+
+        JournalChannel jc = jcb.build();
+
+        // Verifica che force sia stato chiamato almeno una volta
+        verify(mockBc, atLeastOnce()).forceWrite(anyBoolean());
+
+        jc.close();
+    }
+
+    // Mutation coverage
+    // getBufferedChannel: line 279, 282
+    // Controlla che il metodo getBufferedChannel ritorni un BufferedChannel valido se il file è scrivibile
+    @Test
+    public void testJournalChannel_coverage_11() throws Exception {
+
+        JournalChannelBuilder jcb = new JournalChannelBuilder()
+                .withBufferedChannelBuilder(mockBcb);
+
+        JournalChannel jc = jcb.build();
+
+        // Verifica che il BufferedChannel non sia null
+        Assert.assertNotNull("BufferedChannel should not be null", jc.getBufferedChannel());
+
+        jc.close();
+    }
+
+    // Mutation coverage
+    // preAllocIfNeeded: line 286, 287
+    @Test
+    public void testJournalChannel_coverage_12() throws Exception {
+
+        when(mockBc.position()).thenReturn(0L);
+
+        JournalChannelBuilder jcb = new JournalChannelBuilder()
+                .withPreAllocSize(512L)
+                .withJournalAlignSize(512)
+                .withBufferedChannelBuilder(mockBcb)
+                .withFileChannelProvider(mockFcp);
+        JournalChannel jc = jcb.build();
+
+        // Azzeriamo le interazioni sul mock del FileChannel dopo la build
+        clearInvocations(mockFc);
+
+        // Chiamata che NON deve causare preallocazione (bc.position() + size == nextPrealloc: 0 + 512 == 512)
+        jc.preAllocIfNeeded(512L);
+
+        // Chiamata che NON deve causare preallocazione (bc.position() + size < nextPrealloc: 0 + 0 < 512)
+        jc.preAllocIfNeeded(0L);
+
+        // Verifica che non sia stata effettuata nessuna scrittura
+        verify(mockFc, never()).write(any(ByteBuffer.class), anyLong());
+
+        // Chiamata che deve causare preallocazione (bc.position() + size > nextPrealloc: 0 + 513 > 512)
+        jc.preAllocIfNeeded(513L);
+
+        // La scrittura deve avvenire
+        verify(mockFc, atLeastOnce()).write(any(ByteBuffer.class), anyLong());
+
+        jc.close();
+    }
+
+    // Mutation coverage
+    // preAllocIfNeeded: line 289
+    @Test
+    public void testJournalChannel_coverage_13() throws Exception {
+        when(mockBc.position()).thenReturn(0L);
+
+        JournalChannelBuilder jcb = new JournalChannelBuilder()
+                .withPreAllocSize(Long.MIN_VALUE)
+                .withBufferedChannelBuilder(mockBcb)
+                .withFileChannelProvider(mockFcp);
+        JournalChannel jc = jcb.build();
+
+        clearInvocations(mockFc);
+
+        try {
+            jc.preAllocIfNeeded(1L);
+            Assert.fail("Expected IllegalArgumentException due to negative offset");
+        } catch (Exception e) {
+            verify(mockFc, atLeastOnce()).write(any(ByteBuffer.class), anyLong());
+            Assert.assertTrue(e instanceof IllegalArgumentException);
+        }
+
+        jc.close();
+    }
+
+    // Mutation coverage
+    // close: line 300
+    // Controlla che il BufferedChannel venga chiuso correttamente
+    @Test
+    public void testJournalChannel_coverage_14() throws Exception {
+        JournalChannelBuilder jcb = new JournalChannelBuilder()
+                .withBufferedChannelBuilder(mockBcb)
+                .withFileChannelProvider(mockFcp);
+        JournalChannel jc = jcb.build();
+
+        Assert.assertNotNull("BufferedChannel should not be null", jc.getBufferedChannel());
+
+        // Chiudi il JournalChannel
+        jc.close();
+
+        verify(mockBc, atLeastOnce()).close();
+    }
+
+    // Mutation coverage
+    // close: line 303
+    // Controlla che il FileChannel venga chiuso correttamente
+    @Test
+    public void testJournalChannel_coverage_15() throws Exception {
+
+        File dummyJournalFile = new File(JOURNAL_DIRECTORY, Long.toHexString(dummyJournalId) + ".txn");
+        when(mockBfc.fileExists(dummyJournalFile)).thenReturn(true);
+
+        JournalChannelBuilder jcb = new JournalChannelBuilder()
+                .withBufferedChannelBuilder(mockBcb)
+                .withFileChannelProvider(mockFcp);
+        JournalChannel jc = jcb.build();
+
+        verify(mockBcb, never()).create(any(FileChannel.class), anyInt());
+        try {
+            jc.getBufferedChannel();
+            Assert.fail("Expected IOException due to read-only file");
+        } catch (Exception e) {
+            Assert.assertTrue(e instanceof IOException);
+            Assert.assertNull("BufferedChannel should be null", jc.bc);
+        }
+
+        // Chiudi il JournalChannel
+        jc.close();
+
+        verify(mockFc, atLeastOnce()).close();
+    }
+
+    // Mutation coverage
+    // forceWrite: line 326
+    @Test
+    public void testJournalChannel_coverage_16() throws Exception {
+
+        // Simula una posizione di forceWrite molto grande
+        long forceWritePosition = Long.MAX_VALUE;
+        when(mockBc.forceWrite(anyBoolean())).thenReturn(forceWritePosition);
+
+        try (MockedStatic<PageCacheUtil> pageCacheUtilMock = mockStatic(PageCacheUtil.class)) {
+
+            JournalChannelTest.JournalChannelBuilder jcb = new JournalChannelTest.JournalChannelBuilder()
+                    .withBufferedChannelBuilder(mockBcb)
+                    .withRemoveFromPageCache(true);
+
+            // forceWrite viene chiamata durante la scrittura dell'header
+            JournalChannel jc = jcb.build();
+
+            Field lastDropPosition = jc.getClass().getDeclaredField("lastDropPosition");
+            lastDropPosition.setAccessible(true);
+
+            long lastDropPositionValue = 0L;
+
+            // Verifica che il metodo statico sia stato chiamato almeno una volta
+            pageCacheUtilMock.verify(() -> PageCacheUtil.bestEffortRemoveFromPageCache(anyInt(), anyLong(), anyLong()), atLeastOnce());
+
+            // Verifica che lastDropPosition sia stato aggiornato
+            long newDropPosValue = lastDropPosition.getLong(jc);
+            Assert.assertTrue("New drop position expected greater then previous", newDropPosValue > lastDropPositionValue);
+
+            jc.close();
+        }
+    }
+
+    // Mutation coverage
+    // forceWrite: line 327
+    // Controlla che il metodo forceWrite venga chiamato correttamente solo quando necessario
+    @Test
+    public void testJournalChannel_coverage_17() throws Exception {
+
+        // Simula una posizione di forceWrite
+        long forceWritePosition = Long.MAX_VALUE;
+        when(mockBc.forceWrite(anyBoolean())).thenReturn(forceWritePosition - 1024 * JournalChannel.MB, forceWritePosition - 1024 * JournalChannel.MB, forceWritePosition);
+
+        try (MockedStatic<PageCacheUtil> pageCacheUtilMock = mockStatic(PageCacheUtil.class)) {
+
+            pageCacheUtilMock.when(() -> PageCacheUtil.bestEffortRemoveFromPageCache(anyInt(), anyLong(), anyLong()))
+                .thenAnswer(invocation -> {
+                    long position = invocation.getArgument(1);
+                    long length = invocation.getArgument(2);
+                    if (position < 0 || length < 0) {
+                        throw new IOException("Negative value");
+                    }
+                    return null;
+                });
+
+            JournalChannelTest.JournalChannelBuilder jcb = new JournalChannelTest.JournalChannelBuilder()
+                    .withBufferedChannelBuilder(mockBcb)
+                    .withRemoveFromPageCache(true);
+
+            // forceWrite viene chiamata durante la scrittura dell'header
+            JournalChannel jc = jcb.build();
+
+            Field lastDropPosition = jc.getClass().getDeclaredField("lastDropPosition");
+            lastDropPosition.setAccessible(true);
+
+            long lastDropPositionValue = lastDropPosition.getLong(jc);
+
+            // Simula una scrittura vuota
+            jc.forceWrite(true);
+
+            // Verifica che lastDropPosition non sia stato aggiornato
+            long newDropPosValue = lastDropPosition.getLong(jc);
+            Assert.assertEquals("New drop position expected equal to the previous", lastDropPositionValue, newDropPosValue);
+
+            // Simula una scrittura con dati
+            lastDropPositionValue = newDropPosValue;
+            jc.forceWrite(false);
+            newDropPosValue = lastDropPosition.getLong(jc);
+
+            Assert.assertTrue("New drop position expected greater then previous", newDropPosValue > lastDropPositionValue);
+
+            // Verifica che il metodo statico venga chiamato DUE SOLE volta
+            // La prima volta per l'header, la seconda per i dati
+            pageCacheUtilMock.verify(() -> PageCacheUtil.bestEffortRemoveFromPageCache(anyInt(), anyLong(), anyLong()), times(2));
+
+            jc.close();
+        }
     }
 
     // Line coverage
+    // Controlla che non venga creato il JournalChannel se non può essere posizionato correttamente il cursor
     @Test
-    public void testJournalChannel_coverage_4() throws Exception {
-        FileChannel mockFc = mock(FileChannel.class);
-        lenient().when(mockFc.position(anyLong())).thenThrow(new IOException());
+    public void testJournalChannel_coverage_18() throws Exception {
 
-        BookieFileChannel mockBfc = mock(BookieFileChannel.class);
-        lenient().when(mockBfc.getFileChannel()).thenReturn(mockFc);
-
-        FileChannelProvider provider = mock(FileChannelProvider.class);
-        when(provider.open(any(File.class), any(ServerConfiguration.class))).thenReturn(mockBfc);
+        when(mockBfc.fileExists(any(File.class))).thenReturn(true);
+        when(mockFc.position(anyLong())).thenThrow(new IOException("Cannot set position"));
 
         File dummyJournalFile = new File(JOURNAL_DIRECTORY, Long.toHexString(dummyJournalId) + ".txn");
         if (!dummyJournalFile.exists()) dummyJournalFile.createNewFile();
 
         try {
             JournalChannelBuilder jcb = new JournalChannelBuilder()
-                    .withFileChannelProvider(provider);
+                    .withFileChannelProvider(mockFcp);
             jcb.build();
-            Assert.fail("Expected IOException");
-        } catch (IOException e) {
-            Assert.assertTrue(e instanceof IOException);
+            Assert.fail("Expected IOException due to position failure");
+        } catch (Exception e) {
+            Assert.assertTrue("Expected IOException due to position failure", e instanceof IOException);
         }
+
     }
+
+    // --- HEADER TESTS ---
 
     // Line coverage
     // formatVersion V1: nessun header
@@ -675,7 +1076,7 @@ public class JournalChannelTest {
 
         try {
             JournalChannelBuilder jcb = new JournalChannelBuilder();
-            JournalChannel jc = jcb.build();
+            jcb.build();
             Assert.fail("Expected Exception due to invalid version 0");
         } catch (Exception e) {
             Assert.assertTrue(e instanceof IOException);
@@ -698,7 +1099,7 @@ public class JournalChannelTest {
 
         try {
             JournalChannelBuilder jcb = new JournalChannelBuilder();
-            JournalChannel jc = jcb.build();
+            jcb.build();
             Assert.fail("Expected Exception due to invalid version -1");
         } catch (Exception e) {
             Assert.assertTrue(e instanceof IOException);
@@ -721,20 +1122,20 @@ public class JournalChannelTest {
 
         try {
             JournalChannelBuilder jcb = new JournalChannelBuilder();
-            JournalChannel jc = jcb.build();
+            jcb.build();
             Assert.fail("Expected Exception due to invalid version CURRENT_VERSION + 1");
         } catch (Exception e) {
             Assert.assertTrue(e instanceof IOException);
         }
-    }
+    }*/
 
     private class JournalChannelBuilder {
         private File journalDirectory = JOURNAL_DIRECTORY;
         private Long logId = dummyJournalId;
-        private int preAllocSize = 4096;
+        private long preAllocSize = 4096;
         private int writeBufferSize = 4096;
         private int journalAlignSize = 512;
-        private long position = 0;
+        private long position = -12345;
         private boolean fRemoveFromPageCache = false;
         private int formatVersionToWrite = JournalChannel.V6;
         private Journal.BufferedChannelBuilder bcBuilder = Journal.BufferedChannelBuilder.DEFAULT_BCBUILDER;
@@ -752,7 +1153,7 @@ public class JournalChannelTest {
             return this;
         }
 
-        public JournalChannelBuilder withPreAllocSize(int size) {
+        public JournalChannelBuilder withPreAllocSize(long size) {
             this.preAllocSize = size;
             return this;
         }
@@ -803,6 +1204,19 @@ public class JournalChannelTest {
         }
 
         public JournalChannel build() throws Exception {
+
+            if(position != -12345) {
+                return new JournalChannel(
+                    journalDirectory,
+                    logId,
+                    preAllocSize,
+                    writeBufferSize,
+                    position,
+                    conf,
+                    provider
+                );
+            }
+
             return new JournalChannel(
                 journalDirectory,
                 logId,

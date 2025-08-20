@@ -27,7 +27,7 @@ import static org.evosuite.runtime.EvoAssertions.verifyException;
 import static org.evosuite.shaded.org.mockito.Mockito.*;
 import static org.junit.Assert.*;
 
-@RunWith(EvoRunner.class) @EvoRunnerParameters(mockJVMNonDeterminism = true, useVFS = true, useVNET = true, resetStaticState = true, separateClassLoader = true)
+@RunWith(EvoRunner.class) @EvoRunnerParameters(mockJVMNonDeterminism = true, useVFS = true, useVNET = true, resetStaticState = true, separateClassLoader = false)
 public class JournalChannel_ESTest extends JournalChannel_ESTest_scaffolding {
 
   @Test(timeout = 4000)

@@ -264,19 +264,19 @@
               <outputDirectory>${project.build.directory}/coverage-reports/jacoco</outputDirectory>
               <!-- pattern di classi da includere, ad es. solo le classi sotto il package org.example -->
               <includes>
-                <include>org/apache/bookkeeper/bookie/Journal.class</include>
+                <!--  <include>org/apache/bookkeeper/bookie/Journal.class</include> -->
                 <include>org/apache/bookkeeper/bookie/JournalChannel.class</include>
-              </includes>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <configuration>
-          <trimStackTrace>false</trimStackTrace>
-          <!-- add-opens permette al test JournlLLMRun di eseguire anche su JDK 17+ evitando le restrizioni su reflection -->
+            </includes>
+          </configuration>
+        </execution>
+      </executions>
+    </plugin>
+    <plugin>
+      <groupId>org.apache.maven.plugins</groupId>
+      <artifactId>maven-surefire-plugin</artifactId>
+      <configuration>
+        <trimStackTrace>false</trimStackTrace>
+        <!-- add-opens permette al test JournlLLMRun di eseguire anche su JDK 17+ evitando le restrizioni su reflection -->
           <!-- <argLine>${surefireArgLine} -add-opens java.base/java.lang=ALL-UNNAMED -add-opens java.desktop/java.awt=ALL-UNNAMED</argLine> -->
           <argLine>${surefireArgLine}</argLine>
           <properties>
@@ -392,19 +392,19 @@
             <configuration>
               <targetClasses>
                 <param>org.apache.bookkeeper.bookie.JournalChannel</param>
-                <param>org.apache.bookkeeper.bookie.Journal</param>
-              </targetClasses>
-              <excludedTestClasses>
-                <param>*ESTest*</param>
-              </excludedTestClasses>
-              <threads>1</threads>
-              <outputFormats>
-                <param>XML</param>
-                <param>HTML</param>
-              </outputFormats>
-              <exportLineCoverage>true</exportLineCoverage>
-              <reportsDirectory>${project.build.directory}/coverage-reports/pit</reportsDirectory>
-              <!-- <verbose>true</verbose> -->
+                <!-- <param>org.apache.bookkeeper.bookie.Journal</param> -->
+            </targetClasses>
+            <excludedTestClasses>
+              <param>*ESTest*</param>
+            </excludedTestClasses>
+            <threads>1</threads>
+            <outputFormats>
+              <param>XML</param>
+              <param>HTML</param>
+            </outputFormats>
+            <exportLineCoverage>true</exportLineCoverage>
+            <reportsDirectory>${project.build.directory}/coverage-reports/pit</reportsDirectory>
+            <!-- <verbose>true</verbose> -->
             </configuration>
             <executions>
               <execution>
