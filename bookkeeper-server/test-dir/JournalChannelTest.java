@@ -24,6 +24,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.UUID;
 
 import static org.mockito.Mockito.*;
@@ -202,12 +203,12 @@ public class JournalChannelTest {
         lenient().when(mockBfc.getFileChannel()).thenReturn(mockFc);
 
         mockFcp = mock(FileChannelProvider.class);
-        // when(mockFcp.open(any(File.class), any(ServerConfiguration.class))).thenReturn(mockBfc);
+        when(mockFcp.open(any(File.class), any(ServerConfiguration.class))).thenReturn(mockBfc);
 
         mockBc = mock(BufferedChannel.class);
 
         mockBcb = mock(Journal.BufferedChannelBuilder.class);
-        // when(mockBcb.create(any(FileChannel.class), anyInt())).thenReturn(mockBc);
+        when(mockBcb.create(any(FileChannel.class), anyInt())).thenReturn(mockBc);
 
     }
 
@@ -218,6 +219,11 @@ public class JournalChannelTest {
                 file.delete();
             }
             JOURNAL_DIRECTORY.delete();
+        }
+        for(File file : Objects.requireNonNull(new File(".").listFiles())) {
+            if (file.getName().endsWith(".txn")) {
+                file.delete();
+            }
         }
     }
 
@@ -250,14 +256,30 @@ public class JournalChannelTest {
 
     // journalDirectory: non esistente
     @Test
-    public void testJournalChannel_1() {
+    public void testJournalChannel_1a() {
         try {
             File directory = new File("/tmp/not-found-directory");
             JournalChannelBuilder jcb = new JournalChannelBuilder().withJournalDirectory(directory);
             jcb.build();
             Assert.fail("Expected IOException due to non-existent journal directory");
         } catch (Exception e) {
-            Assert.assertTrue(e instanceof Exception);
+            Assert.assertTrue(e instanceof IOException);
+        }
+    }
+
+    // journalDirectory: null
+    @Test
+    public void testJournalChannel_1b() {
+        try {
+            // Usa la cartella corrente come directory di journal
+            JournalChannelBuilder jcb = new JournalChannelBuilder().withJournalDirectory(null);
+            JournalChannel jc = jcb.build();
+            checkDummyJournalCreation();
+            checkDummyJournalWrite(jc);
+            checkDummyJournalRead(jc);
+            Assert.fail("Expected IOException due to null journal directory");
+        } catch (Exception e) {
+            Assert.assertTrue(e instanceof IOException);
         }
     }
 
@@ -309,6 +331,9 @@ public class JournalChannelTest {
         JournalChannelBuilder jcb = new JournalChannelBuilder().withWriteBufferSize(0);
         JournalChannel jc = jcb.build();
         Assert.assertTrue(checkDummyJournalCreation());
+        // Questo test manda il loop la suite quando
+        // si prova a fare una scrittura
+        // Assert.assertTrue(checkDummyJournalWrite(jc));
         Assert.assertTrue(checkDummyJournalRead(jc));
         jc.close();
     }
@@ -432,12 +457,59 @@ public class JournalChannelTest {
         }
     }
 
+    // --- BUFFERED_CHANNEL_BUILDER ---
+
+    // bufferedChannelBuilder: null
+    @Test
+    public void testJournalChannel_15() throws Exception {
+        try {
+            JournalChannelBuilder jcb = new JournalChannelBuilder().withBufferedChannelBuilder(null);
+            JournalChannel jc = jcb.build();
+            checkDummyJournalCreation();
+            checkDummyJournalWrite(jc);
+            checkDummyJournalRead(jc);
+            Assert.fail("Expected NullPointerException due to null buffered channel builder");
+        } catch (Exception e) {
+            Assert.assertTrue(e instanceof NullPointerException);
+        }
+    }
+
+    // --- SERVER_CONFIGURATION ---
+
+    // serverConfiguration: null
+    @Test
+    public void testJournalChannel_16() throws Exception {
+        JournalChannelBuilder jcb = new JournalChannelBuilder().withServerConfiguration(null);
+        JournalChannel jc = jcb.build();
+        Assert.assertTrue(checkDummyJournalCreation());
+        Assert.assertTrue(checkDummyJournalWrite(jc));
+        Assert.assertTrue(checkDummyJournalRead(jc));
+        jc.close();
+    }
+
+    // --- FILE_CHANNEL_PROVIDER ---
+
+    // serverConfiguration: null
+    @Test
+    public void testJournalChannel_17() throws Exception {
+        try {
+            JournalChannelBuilder jcb = new JournalChannelBuilder().withFileChannelProvider(null);
+            JournalChannel jc = jcb.build();
+            checkDummyJournalCreation();
+            checkDummyJournalWrite(jc);
+            checkDummyJournalRead(jc);
+            Assert.fail("Expected NullPointerException due to null file channel provider");
+        } catch (Exception e) {
+            Assert.assertTrue(e instanceof NullPointerException);
+        }
+    }
+
     // --- TO_REPLACE_LOG_ID ---
     // Di default non viene utilizzato
 
     // toReplaceLogId: valido
     @Test
-    public void testJournalChannel_15() throws Exception {
+    public void testJournalChannel_18() throws Exception {
 
         Long toReplaceLogId = 1L;
         File toReplaceLogFile = new File(JOURNAL_DIRECTORY, Long.toHexString(toReplaceLogId) + ".txn");
@@ -453,7 +525,7 @@ public class JournalChannelTest {
 
     // toReplaceLogId: negativo
     @Test
-    public void testJournalChannel_16() throws Exception {
+    public void testJournalChannel_19() throws Exception {
 
         Long toReplaceLogId = -1L;
         File toReplaceLogFile = new File(JOURNAL_DIRECTORY, Long.toHexString(toReplaceLogId) + ".txn");
@@ -467,7 +539,7 @@ public class JournalChannelTest {
         jc.close();
     }
 
-    /*// --- COVERAGE ---
+    // --- COVERAGE ---
 
     // Mutation coverage for renameJournalFile
     // toReplaceLogId: valido
@@ -1127,7 +1199,7 @@ public class JournalChannelTest {
         } catch (Exception e) {
             Assert.assertTrue(e instanceof IOException);
         }
-    }*/
+    }
 
     private class JournalChannelBuilder {
         private File journalDirectory = JOURNAL_DIRECTORY;

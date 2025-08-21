@@ -4,9 +4,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.Unpooled;
 import io.netty.buffer.UnpooledByteBufAllocator;
-import org.apache.bookkeeper.bookie.stats.JournalStats;
-import org.apache.bookkeeper.common.util.affinity.CpuAffinity;
-import org.apache.bookkeeper.common.util.affinity.impl.CpuAffinityImpl;
 import org.apache.bookkeeper.conf.ServerConfiguration;
 import org.apache.bookkeeper.net.BookieId;
 import org.apache.bookkeeper.proto.BookieRequestHandler;
@@ -15,7 +12,6 @@ import org.apache.bookkeeper.stats.Counter;
 import org.apache.bookkeeper.stats.NullStatsLogger;
 import org.apache.bookkeeper.stats.OpStatsLogger;
 import org.apache.bookkeeper.stats.StatsLogger;
-import org.bouncycastle.util.encoders.Hex;
 import org.junit.*;
 
 import java.io.File;
@@ -38,7 +34,6 @@ import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.verify;
 
 import org.mockito.Mock;
-import org.mockito.MockedConstruction;
 
 @RunWith(MockitoJUnitRunner.class)
 public class JournalTest {
@@ -171,7 +166,7 @@ public class JournalTest {
     }
 
     @Test
-    public void testInvalidDirectoryRetrivialJournalIds() {
+    public void testInvalidDirectoryRetrievalJournalIds() {
 
         // Search in a non-existing directory
         try {
@@ -192,7 +187,7 @@ public class JournalTest {
     }
 
     @Test
-    public void testEmptyDirectoryRetrivialJournalIds() {
+    public void testEmptyDirectoryRetrievalJournalIds() {
 
         // Create an empty directory for testing
         if (JOURNAL_DIRECTORY.exists()) {
@@ -211,7 +206,7 @@ public class JournalTest {
     }
 
     @Test
-    public void testValidDirectoryRetrivialJournalIds() {
+    public void testValidDirectoryRetrievalJournalIds() {
 
         // Create a file in the journal directory
         Long invalidFileId = 0L;
@@ -267,7 +262,7 @@ public class JournalTest {
     }
 
     @Test
-    public void testInvalidExtensionInDirectoryRetrivialJournalIds() {
+    public void testInvalidExtensionInDirectoryRetrievalJournalIds() {
 
         // Create a file in the journal directory
         Long invalidFileId = 0L;
