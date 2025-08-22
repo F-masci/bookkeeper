@@ -1432,8 +1432,20 @@ public class JournalTest {
     //      && journalIds.get(0) < lastLogMark.getCurMark().getLogFileId()
     //      ? journalIds.get(0) : null;
     //
-    // Questo test è stato commentato poiché non è possibile riutilizzare un journal se non esiste
-    // e il metodo listJournalIds ritorna una lista vuota ma non viene controllata.
+    // Il metodo listJournalIds ritorna una lista vuota ma non viene controllata.
+    //
+    //
+    // INFO  - [BookieJournal-3181:Journal@960] - Starting journal on /tmp/bookkeeper/journal-run-coverage/empty-dir
+    // ERROR - [BookieJournal-3181:BookieCriticalThread@41] - Uncaught exception in thread BookieJournal-3181 and is exiting!
+    // java.lang.IndexOutOfBoundsException: Index: 0
+    //	at java.util.Collections$EmptyList.get(Collections.java:4456) ~[?:1.8.0_452]
+    //	at org.apache.bookkeeper.bookie.Journal.run(Journal.java:1007) ~[classes/:?]
+    //	at org.apache.bookkeeper.bookie.Journal.lambda$start$3(Journal.java:1298) ~[classes/:?]
+    //	at io.netty.util.concurrent.FastThreadLocalRunnable.run(FastThreadLocalRunnable.java:30) ~[netty-common-4.1.121.Final.jar:4.1.121.Final]
+    //	at java.lang.Thread.run(Thread.java:750) [?:1.8.0_452]
+    //
+    // L'eccezione causa la terminazione del thread e quindi il test va in errore
+    // portando la build a fallire, per cui non può essere inserito.
     /*@Test
     public void testRun_ReuseJournalNotPresent() throws Exception {
         try (MockedStatic<FileChannelProvider> fileChannelProviderMock = mockStatic(FileChannelProvider.class)) {
@@ -1441,8 +1453,8 @@ public class JournalTest {
             String entryText = "test";
             long entryNum = 2L;
 
-            // Prepara un file journal esistente
-            File journalDirectory = new File(JOURNAL_PATH + "/journal-run-coverage");
+            // Prepara una journal directory esistente
+            File journalDirectory = new File(JOURNAL_PATH + "/journal-run-coverage/empty-dir");
             if(!journalDirectory.exists()) journalDirectory.mkdirs();
 
             // Mock

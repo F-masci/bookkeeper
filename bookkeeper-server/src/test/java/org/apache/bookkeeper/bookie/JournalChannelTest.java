@@ -93,7 +93,7 @@ public class JournalChannelTest {
         ByteBuf buffer = Unpooled.wrappedBuffer(expected);
         long fcPosition = journalChannel.fc.position();
         if(fcPosition < 512) throw new IOException("FileChannel position is less than 512 bytes, cannot write data");
-        if(journalChannel.bc.writeCapacity <= 0) throw new IOException("BufferedChannel write capacity is zero or negative");
+        // if(journalChannel.bc.writeCapacity <= 0) throw new IOException("BufferedChannel write capacity is zero or negative – writing to the buffer will cause infinite loops");
         journalChannel.bc.write(buffer);
         journalChannel.bc.flushAndForceWrite(false);
 
@@ -326,14 +326,14 @@ public class JournalChannelTest {
     // --- WRITE_BUFFER_SIZE ---
 
     // writeBufferSize: zero
-    @Test
+    @Test(timeout = 2000)
     public void testJournalChannel_5() throws Exception {
         JournalChannelBuilder jcb = new JournalChannelBuilder().withWriteBufferSize(0);
         JournalChannel jc = jcb.build();
         Assert.assertTrue(checkDummyJournalCreation());
         // Questo test manda il loop la suite quando
         // si prova a fare una scrittura
-        // Assert.assertTrue(checkDummyJournalWrite(jc));
+        Assert.assertTrue(checkDummyJournalWrite(jc));
         Assert.assertTrue(checkDummyJournalRead(jc));
         jc.close();
     }
