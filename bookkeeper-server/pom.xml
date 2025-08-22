@@ -289,7 +289,7 @@
               <value>org.evosuite.runtime.InitializingListener</value>
             </property>
           </properties>
-          <testFailureIgnore>true</testFailureIgnore>
+          <!-- <testFailureIgnore>true</testFailureIgnore> -->
         </configuration>
       </plugin>
           <plugin>
